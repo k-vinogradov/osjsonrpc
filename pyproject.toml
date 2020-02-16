@@ -6,7 +6,7 @@ authors = ["Konstantin V. <mail@k-vinogradov.ru>"]
 license = "MIT"
 readme = "README.md"
 homepage = "https://github.com/k-vinogradov/osjsonrpc"
-repository = "git@github.com:k-vinogradov/osjsonrpc.git"
+repository = "https://github.com/k-vinogradov/osjsonrpc"
 keywords = [
     "jsonrpc",
     "api",
