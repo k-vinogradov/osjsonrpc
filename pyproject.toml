@@ -1,10 +1,17 @@
 [tool.poetry]
 name = "osjsonrpc"
-version = "0.1.0"
+version = "0.1.1"
 description = "Over-simple JSON-RPC Python implementation for aiohttp"
 authors = ["Konstantin V. <mail@k-vinogradov.ru>"]
 license = "MIT"
 readme = "README.md"
+homepage = "https://github.com/k-vinogradov/osjsonrpc"
+repository = "git@github.com:k-vinogradov/osjsonrpc.git"
+keywords = [
+    "jsonrpc",
+    "api",
+    "rpc"
+]
 
 [tool.poetry.dependencies]
 python = "^3.6"
