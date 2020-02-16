@@ -158,7 +158,6 @@ class JsonRpcEndpoint:
     async def process_batch_rpc(self, batch_data: list) -> list:
         response_content = []
         for rpc in batch_data:
-            # noinspection PyBroadException
             try:
                 response_content.append(await self.process_single_rpc(rpc))
             except web.HTTPAccepted:
