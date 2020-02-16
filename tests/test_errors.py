@@ -1,15 +1,7 @@
 import json
 import pytest
 from aiohttp import web
-
-
-class Request:
-    def __init__(self, headers, json_data):
-        self.headers = headers
-        self.json_data = json_data
-
-    async def json(self):
-        return json.loads(self.json_data)
+from tests.common import Request
 
 
 def check_error(response: web.Response, expected_code):
@@ -32,7 +24,7 @@ async def test_invalid_content_type(endpoint):
     """
     request = Request({"Content-Type": "text/html", "Accept": "application/json"}, "")
     with pytest.raises(web.HTTPUnsupportedMediaType):
-        await endpoint.handler(request)
+        await endpoint.handle_request(request)
 
 
 @pytest.mark.asyncio
@@ -40,7 +32,7 @@ async def test_invalid_json(endpoint):
     request = Request(
         {"Content-Type": "application/json", "Accept": "application/json"}, "invalid_json_string",
     )
-    check_error(await endpoint.handler(request), -32700)
+    check_error(await endpoint.handle_request(request), -32700)
 
 
 @pytest.mark.asyncio
@@ -48,7 +40,7 @@ async def test_invalid_request(endpoint):
     request = Request(
         {"Content-Type": "application/json", "Accept": "application/json"}, '{"key": "value"}',
     )
-    check_error(await endpoint.handler(request), -32600)
+    check_error(await endpoint.handle_request(request), -32600)
 
 
 @pytest.mark.asyncio
@@ -57,4 +49,13 @@ async def test_invalid_params(endpoint):
         {"Content-Type": "application/json", "Accept": "application/json"},
         json.dumps({"jsonrpc": "2.0", "method": "ping", "params": {"option": "value"}, "id": 1}),
     )
-    check_error(await endpoint.handler(request), -32602)
+    check_error(await endpoint.handle_request(request), -32602)
+
+
+@pytest.mark.asyncio
+async def test_method_not_found(endpoint):
+    request = Request(
+        {"Content-Type": "application/json", "Accept": "application/json"},
+        json.dumps({"jsonrpc": "2.0", "method": "invalid_method", "id": 1}),
+    )
+    check_error(await endpoint.handle_request(request), -32601)

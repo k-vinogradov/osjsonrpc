@@ -12,8 +12,9 @@ async def mirror(*args, **kwargs):
 
 @pytest.fixture
 def endpoint():
-    rpc = JsonRpcEndpoint()
-    rpc.register_method(ping)
-    rpc.register_method(mirror)
-    rpc.register_method(ping, name="ping_renamed")
-    return rpc
+    return (
+        JsonRpcEndpoint()
+        .register_method(ping)
+        .register_method(mirror)
+        .register_method(ping, name="ping_renamed")
+    )
