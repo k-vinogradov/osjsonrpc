@@ -1,6 +1,6 @@
 # Over-Simple JSON RPC Implementation
 
-Over-simple JSON-RPC Python implementation for aiohttp
+Over-simple [JSON-RPC](https://www.jsonrpc.org/specification) Python implementation for aiohttp
 
 ## Install
 
