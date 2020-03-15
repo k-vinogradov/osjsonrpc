@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "osjsonrpc"
-version = "0.2.2"
+version = "0.2.3"
 description = "Over-simple JSON-RPC Python implementation for aiohttp"
 authors = ["Konstantin V. <mail@k-vinogradov.ru>"]
 license = "MIT"
