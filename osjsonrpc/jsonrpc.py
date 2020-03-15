@@ -12,7 +12,7 @@ PROTOCOL_VERSION = "2.0"
 
 UNKNOWN_ERROR = "Unknown Error"
 
-DEFAULT_LOGGER = logging.getLogger("aiohttp.server")
+DEFAULT_LOGGER = logging.getLogger("aiohttp.jsonrpc")
 
 
 class Errors(Enum):
@@ -194,10 +194,10 @@ class JsonRpcEndpoint:
             exp_class, exc, trace = sys.exc_info()
             logger = logging.getLogger("aiohttp.server")
             logger.error("".join(format_exception(exp_class, exc, trace)))
-            kwargs = {"detail": exc_message(exc), "rid": rid}
+            new_exc = JsonRpcError(detail=exc_message(exc), rid=rid)
             if self.debug:
-                kwargs["traceback_exception"] = traceback.TracebackException(*sys.exc_info())
-            raise JsonRpcError(**kwargs)
+                raise new_exc.with_traceback()
+            raise new_exc
 
         if not rid:
             raise web.HTTPAccepted()
