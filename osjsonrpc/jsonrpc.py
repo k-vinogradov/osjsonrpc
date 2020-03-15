@@ -1,14 +1,18 @@
 import json
 import logging
+import traceback
 import sys
 from traceback import format_exception, format_exception_only
 from enum import Enum
+from time import time
 from typing import Callable, Union, Any, Optional
 from aiohttp import web
 
 PROTOCOL_VERSION = "2.0"
 
 UNKNOWN_ERROR = "Unknown Error"
+
+DEFAULT_LOGGER = logging.getLogger("aiohttp.server")
 
 
 class Errors(Enum):
@@ -75,23 +79,34 @@ class JsonRpcError(RuntimeError):
             content["id"] = self.rid
         return content
 
-    def set_request(self, request):
-        self.data["request"] = request
+    def set_context(self, request=None, rid=None):
+        if request:
+            self.data["request"] = request
+        if rid:
+            self.rid = rid
+
+    def with_traceback(self, exc_info=None, traceback_exception=None):
+        if not traceback_exception:
+            traceback_exception = traceback.TracebackException(*(exc_info or sys.exc_info()))
+        self.data["traceback_exception"] = "".join(traceback_exception.format()).split("\n")
+        return self
 
 
-def exp_message(exp):
+def exc_message(exp):
     return "".join(format_exception_only(exp.__class__, exp)).strip()
 
 
 class JsonRpcEndpoint:
     """ JSON RPC requests handler. """
 
-    def __init__(self):
+    def __init__(self, debug=False, logger=DEFAULT_LOGGER):
         self.methods = {}
         self.docs = {}
+        self.debug = debug
+        self.logger = logger
 
     async def handle_request(self, request: web.Request) -> web.Response:
-
+        request_time = int(time() * 1000)
         try:
             # Check if the Content-Type and Accept headers both are presented
             # and contain 'application/json'
@@ -101,21 +116,48 @@ class JsonRpcEndpoint:
             if request.headers["Accept"] != "application/json":
                 raise web.HTTPNotAcceptable(reason="Invalid Accept header")
         except KeyError as exp:
-            reason = "{} header is required".format(exp_message(exp))
+            reason = "{} header is required".format(exc_message(exp))
             raise web.HTTPNotAcceptable(reason=reason)
 
         try:
             request_data = await request.json()
         except json.JSONDecodeError:
-            return JsonRpcError(Errors.PARSE_ERROR).http_response()
+            exp = JsonRpcError(Errors.PARSE_ERROR)
+            self.log_request(request, request_time, "invalid", exp)
+            return exp.http_response()
 
         try:
             if isinstance(request_data, list):
-                return web.json_response(await self.process_batch_rpc(request_data))
-            return web.json_response(await self.process_single_rpc(request_data))
+                response_data = await self.process_batch_rpc(request_data)
+                self.log_request(request, request_time)
+                return web.json_response(response_data)
+            response_data = await self.process_single_rpc(request_data)
+            self.log_request(request, request_time, request_data["method"])
+            return web.json_response(response_data)
         except JsonRpcError as exp:
-            exp.set_request(request_data)
+            exp.set_context(request_data)
+            self.log_request(
+                request, request_time, request_data.get("method", "unknown/invalid"), exp
+            )
             return exp.http_response()
+
+    def log_request(
+        self,
+        request: web.Request,
+        request_timestamp: int,
+        method: str = None,
+        exp: JsonRpcError = None,
+    ):
+        message = "{} JSON RPC {} request done in {}ms: {}".format(
+            request.remote,
+            method or "batch",
+            int(time() * 1000) - request_timestamp,
+            exp.message if exp else "OK",
+        )
+        if exp:
+            self.logger.error(message)
+        else:
+            self.logger.info(message)
 
     async def process_single_rpc(self, rpc_data: dict) -> dict:
         try:
@@ -142,13 +184,20 @@ class JsonRpcEndpoint:
                 result = await self.methods[method_name](*params)
             else:
                 result = await self.methods[method_name](**params)
-        except TypeError as exp:
-            raise JsonRpcError(Errors.INVALID_PARAMS, rid=rid, detail=exp_message(exp))
+        except JsonRpcError as exc:
+            exc.set_context(rid=rid)
+            raise exc
+        except TypeError as exc:
+            new_exp = JsonRpcError(Errors.INVALID_PARAMS, rid=rid, detail=exc_message(exc))
+            raise new_exp.with_traceback() if self.debug else new_exp
         except Exception:  # pylint: disable=broad-except
-            exp_class, exp, trace = sys.exc_info()
+            exp_class, exc, trace = sys.exc_info()
             logger = logging.getLogger("aiohttp.server")
-            logger.error("".join(format_exception(exp_class, exp, trace)))
-            raise JsonRpcError(detail=exp_message(exp), rid=rid)
+            logger.error("".join(format_exception(exp_class, exc, trace)))
+            kwargs = {"detail": exc_message(exc), "rid": rid}
+            if self.debug:
+                kwargs["traceback_exception"] = traceback.TracebackException(*sys.exc_info())
+            raise JsonRpcError(**kwargs)
 
         if not rid:
             raise web.HTTPAccepted()
@@ -163,7 +212,7 @@ class JsonRpcEndpoint:
             except web.HTTPAccepted:
                 pass
             except JsonRpcError as exp:
-                exp.set_request(rpc)
+                exp.set_context(rpc)
                 response_content.append(exp.response_content())
         return response_content
 
